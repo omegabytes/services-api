@@ -1,0 +1,36 @@
+version: "3"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/fetch-service-challenge/
+    command: go run main.go
+    working_dir: /fetch-service-challenge/cmd
+    depends_on:
+      - services-mysql
+    ports:
+      - 8080:8080
+    expose:
+      - 8080
+
+  services-mysql:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=pass
+      - MYSQL_DATABASE=services
+    volumes:
+      - ./mysql-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "3313:3306"
+    expose:
+      - 3306
+    restart: always
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
