@@ -10,7 +10,9 @@ services:
     command: go run main.go
     working_dir: /fetch-service-challenge/cmd
     depends_on:
-      - services-mysql
+      services-mysql:
+        condition: service_healthy
+    restart: always
     ports:
       - 8080:8080
     expose:
@@ -27,8 +29,6 @@ services:
       - ./mysql-scripts:/docker-entrypoint-initdb.d
     ports:
       - "3313:3306"
-    expose:
-      - 3306
     restart: always
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]

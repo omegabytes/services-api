@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var config struct {
@@ -22,16 +24,22 @@ func init() {
 	config.RequestTimeout = 10
 	config.MySQLUsername = "user"
 	config.MySQLPassword = "pass"
-	config.MySQLHost = "localhost"
+	config.MySQLHost = "services-mysql"
 	config.MySQLPort = 3306
 	config.MySQLDatabase = "services"
 }
 
 func main() {
+	fmt.Println(fmt.Sprintf("server started at port %d", config.Port))
+
+	fmt.Println(fmt.Sprintf("connecting to %s on port %d", config.MySQLDatabase, config.MySQLPort))
+	_, err := connectToDB(buildConnectionString())
+	if err != nil {
+		log.Fatal("db err", err)
+	}
+	fmt.Println(fmt.Sprintf("connected to %s", config.MySQLDatabase))
 
 	http.HandleFunc("/", HelloHandler)
-
-	fmt.Println(fmt.Sprintf("server started at port %d", config.Port))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))
 }
 
@@ -63,6 +71,7 @@ func connectToDB(uri string) (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 	db.SetMaxOpenConns(10)
 	db.SetConnMaxLifetime(10)
+	defer db.Close()
 
 	return db, nil
 }
