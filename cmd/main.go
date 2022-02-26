@@ -49,18 +49,35 @@ func main() {
 
 	h := handler{db}
 	r := mux.NewRouter()
-	r.HandleFunc("/services/{id}", h.GetServiceHandler)
 	r.HandleFunc("/services", h.ListServiceHandler)
+	r.HandleFunc("/services/{id}", h.GetServiceHandler)
 	http.Handle("/", r)
 
+	// go func() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))
+	// }()
+
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt)
+	// <-c
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.RequestTimeout*uint16(time.Second)))
+	// defer cancel()
+	// srv.Shutdown(ctx)
+	// log.Println("shutting down")
+	// os.Exit(0)
+
 }
 
 func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
-	sqlStatement := `SELECT * FROM servicetable;`
+	fmt.Println("call.ListService")
+	vars := r.URL.Query()
+	limit := 12
+	offset := vars.Get("offset")
+
+	sqlStatement := `SELECT * FROM servicetable LIMIT ? OFFSET ?;`
 	results := []models.Service{}
 
-	rows, err := h.db.Query(sqlStatement)
+	rows, err := h.db.Query(sqlStatement, limit, offset)
 	if err != nil {
 		panic(err)
 	}
@@ -96,6 +113,7 @@ func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("call.GetService")
 	vars := mux.Vars(r)
 
 	requestedId, ok := vars["id"]
