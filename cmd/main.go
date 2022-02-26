@@ -2,12 +2,19 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/mux"
+	"github.com/omegabytes/services-api/models"
 )
+
+type handler struct {
+	db *sql.DB
+}
 
 var config struct {
 	Port           uint16
@@ -33,29 +40,95 @@ func main() {
 	fmt.Println(fmt.Sprintf("server started at port %d", config.Port))
 
 	fmt.Println(fmt.Sprintf("connecting to %s on port %d", config.MySQLDatabase, config.MySQLPort))
-	_, err := connectToDB(buildConnectionString())
+	db, err := connectToDB(buildConnectionString())
 	if err != nil {
 		log.Fatal("db err", err)
 	}
+	defer db.Close()
 	fmt.Println(fmt.Sprintf("connected to %s", config.MySQLDatabase))
 
-	http.HandleFunc("/", HelloHandler)
+	h := handler{db}
+	r := mux.NewRouter()
+	r.HandleFunc("/services/{id}", h.GetServiceHandler)
+	r.HandleFunc("/services", h.ListServiceHandler)
+	http.Handle("/", r)
+
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))
 }
 
-// get services
+func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
+	sqlStatement := `SELECT * FROM servicetable;`
+	results := []models.Service{}
 
-func GetServiceHandler(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.Query(sqlStatement)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
 
+	for rows.Next() {
+		var id string
+		var description sql.NullString
+		var name string
+
+		switch err = rows.Scan(&id, &name, &description); err {
+		case sql.ErrNoRows:
+			fmt.Println("No rows were returned!")
+		case nil:
+			s := models.Service{
+				Id:          id,
+				Name:        name,
+				Description: description.String,
+			}
+			results = append(results, s)
+		default:
+			panic(err)
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		panic(err)
+	}
+	encode, _ := json.Marshal(results)
+
+	w.Write(encode)
 }
 
-func HelloHandler(w http.ResponseWriter, r *http.Request) {
-	name := "guest"
-	keys, ok := r.URL.Query()["name"]
-	if ok {
-		name = keys[0]
+func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	requestedId, ok := vars["id"]
+	if !ok {
+		panic("id must not be nil")
 	}
-	fmt.Fprintf(w, "hello %s\n", name)
+
+	results := []models.Service{}
+	// todo: sqlinjection guard
+	// tested on curl localhost:8080/services/105%20or%201%3D1
+	row := h.db.QueryRow("SELECT * FROM servicetable WHERE id = ?;", requestedId)
+
+	var id string
+	var description sql.NullString
+	var name string
+
+	switch err := row.Scan(&id, &name, &description); err {
+	case sql.ErrNoRows:
+		fmt.Println("No rows were returned!")
+	case nil:
+		s := models.Service{
+			Id:          id,
+			Name:        name,
+			Description: description.String,
+		}
+		results = append(results, s)
+	default:
+		panic(err)
+	}
+
+	encode, _ := json.Marshal(results)
+
+	w.Write(encode)
 }
 
 func connectToDB(uri string) (*sql.DB, error) {
@@ -71,7 +144,6 @@ func connectToDB(uri string) (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 	db.SetMaxOpenConns(10)
 	db.SetConnMaxLifetime(10)
-	defer db.Close()
 
 	return db, nil
 }
