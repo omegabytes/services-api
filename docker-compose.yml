@@ -1,36 +1,56 @@
 version: "3"
 
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/services-api/
-    command: go run main.go
-    working_dir: /services-api/cmd
-    depends_on:
-      services-mysql:
-        condition: service_healthy
-    restart: always
-    ports:
-      - 8080:8080
-    expose:
-      - 8080
 
-  services-mysql:
-    image: mysql
+
+services:
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   volumes:
+  #     - .:/services-api/
+  #   command: go run main.go
+  #   working_dir: /services-api/cmd
+  #   depends_on:
+  #     services-mysql:
+  #       condition: service_healthy
+  #   restart: always
+  #   ports:
+  #     - 8080:8080
+  #   expose:
+  #     - 8080
+
+  # services-mysql:
+  #   image: mysql
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=root
+  #     - MYSQL_USER=user
+  #     - MYSQL_PASSWORD=pass
+  #     - MYSQL_DATABASE=services
+  #   volumes:
+  #     - ./storage:/docker-entrypoint-initdb.d
+  #   ports:
+  #     - "3313:3306"
+  #   restart: always
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+  #     timeout: 20s
+  #     retries: 10
+  
+  services-psql:  
+    image: postgres
     environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=pass
-      - MYSQL_DATABASE=services
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=services
     volumes:
       - ./storage:/docker-entrypoint-initdb.d
     ports:
-      - "3313:3306"
+      - "5432:5432"
+    expose:
+      - 5432
     restart: always
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+    # healthcheck:
+    #   test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+    #   timeout: 20s
+    #   retries: 10

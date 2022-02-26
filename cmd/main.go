@@ -71,8 +71,8 @@ func main() {
 func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("call.ListService")
 	vars := r.URL.Query()
-	limit := 12
-	offset := vars.Get("offset")
+	offset := vars.Get("offset") // assume offset = last record shown + 1, handled by the front end
+	limit := 12                  // todo: user-defined limits to support dynamic page sizes in the ui
 
 	sqlStatement := `SELECT * FROM servicetable LIMIT ? OFFSET ?;`
 	results := []models.Service{}
