@@ -10,3 +10,9 @@ type Service struct {
 type ServiceVersion struct {
 	Name string
 }
+
+type GetServiceResponse struct {
+}
+
+type ResponseFailure struct {
+}

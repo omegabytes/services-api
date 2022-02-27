@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -17,23 +19,37 @@ type handler struct {
 }
 
 var config struct {
-	Port           uint16
-	RequestTimeout uint16
-	psqlUsername   string
-	psqlPassword   string
-	psqlHost       string
-	psqlPort       uint16
-	psqlDatabase   string
+	// service
+	Port      uint16
+	limit     uint16
+	precision float32
+
+	// database
+	RequestTimeout  uint16
+	psqlUsername    string
+	psqlPassword    string
+	psqlHost        string
+	psqlPort        uint16
+	psqlDatabase    string
+	maxIdleConns    int
+	maxOpenConns    int
+	maxConnLifetime time.Duration
 }
 
 func init() {
 	config.Port = 8080
+	config.limit = 12       // todo: user-defined limits to support dynamic page sizes in the ui
+	config.precision = 0.12 // magic number derived from observing search behavior on my generated dataset
+
 	config.RequestTimeout = 10
 	config.psqlUsername = "postgres"
 	config.psqlPassword = "pass"
 	config.psqlHost = "services-psql"
 	config.psqlPort = 5432
 	config.psqlDatabase = "services"
+	config.maxIdleConns = 1
+	config.maxOpenConns = 10
+	config.maxConnLifetime = 10
 }
 
 func main() {
@@ -73,21 +89,28 @@ func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("call.ListService")
 	vars := r.URL.Query()
 	offset := vars.Get("offset") // assume offset = last record shown + 1, handled by the front end
-	limit := 12                  // todo: user-defined limits to support dynamic page sizes in the ui
 
-	queryStmt := fmt.Sprintf("SELECT * FROM servicetable LIMIT %d", limit)
+	queryStmt := fmt.Sprintf("SELECT * FROM servicetable LIMIT %d", config.limit)
 
 	if offset != "" {
-		queryStmt = fmt.Sprintf("%s OFFSET %s", queryStmt, offset)
+		o, err := strconv.Atoi(offset)
+		if err != nil {
+			http.Error(w, "Invalid offset", 400)
+			return
+		}
+		queryStmt = fmt.Sprintf("%s OFFSET %d", queryStmt, o)
 	}
 
 	rows, err := h.db.Query(queryStmt)
 	if err != nil {
-		panic(err)
+		http.Error(w, "Invalid query", 500)
 	}
 	defer rows.Close()
 
-	results := scanResults(rows)
+	results, err := scanResults(rows)
+	if err != nil {
+		http.Error(w, "Error scanning the database", 500)
+	}
 	encode, _ := json.Marshal(results)
 	w.Write(encode)
 }
@@ -96,16 +119,20 @@ func (h *handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("call.SearchService")
 	vars := r.URL.Query()
 	searchTerm := vars.Get("search")
-	fmt.Println(searchTerm)
 
-	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > 0.12;`, searchTerm)
+	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > %f limit %d;`, searchTerm, config.precision, config.limit)
 	rows, err := h.db.Query(queryStmt)
 	if err != nil {
-		panic(err)
+		http.Error(w, "Invalid query", 500)
 	}
 	defer rows.Close()
 
-	results := scanResults(rows)
+	results, err := scanResults(rows)
+	if err != nil {
+		http.Error(w, "Error scanning the database", 500)
+		return
+	}
+
 	encode, _ := json.Marshal(results)
 	w.Write(encode)
 }
@@ -116,7 +143,7 @@ func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 
 	requestedId, ok := vars["id"]
 	if !ok {
-		panic("id must not be nil")
+		http.Error(w, "'id' is required", 400)
 	}
 
 	results := []models.Service{}
@@ -129,8 +156,6 @@ func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 	var name string
 
 	switch err := row.Scan(&id, &name, &description); err {
-	case sql.ErrNoRows:
-		fmt.Println("No rows were returned!")
 	case nil:
 		s := models.Service{
 			Id:          id,
@@ -139,15 +164,14 @@ func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, s)
 	default:
-		panic(err)
+		http.Error(w, "Error scanning the database", 500)
 	}
 
 	encode, _ := json.Marshal(results)
-
 	w.Write(encode)
 }
 
-func scanResults(rows *sql.Rows) []models.Service {
+func scanResults(rows *sql.Rows) ([]models.Service, error) {
 	results := []models.Service{}
 	for rows.Next() {
 		var id int
@@ -155,8 +179,6 @@ func scanResults(rows *sql.Rows) []models.Service {
 		var name string
 
 		switch err := rows.Scan(&id, &name, &description); err {
-		case sql.ErrNoRows:
-			fmt.Println("No rows were returned!")
 		case nil:
 			s := models.Service{
 				Id:          id,
@@ -165,15 +187,15 @@ func scanResults(rows *sql.Rows) []models.Service {
 			}
 			results = append(results, s)
 		default:
-			panic(err)
+			return nil, err
 		}
 	}
 
 	err := rows.Err()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return results
+	return results, nil
 }
 
 func connectToDB(uri string) (*sql.DB, error) {
@@ -186,9 +208,9 @@ func connectToDB(uri string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db.SetMaxIdleConns(1)
-	db.SetMaxOpenConns(10)
-	db.SetConnMaxLifetime(10)
+	db.SetMaxIdleConns(config.maxIdleConns)
+	db.SetMaxOpenConns(config.maxOpenConns)
+	db.SetConnMaxLifetime(config.maxConnLifetime * time.Second)
 
 	return db, nil
 }
