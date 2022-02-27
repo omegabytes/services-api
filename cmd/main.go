@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/omegabytes/services-api/models"
 )
 
@@ -19,36 +19,37 @@ type handler struct {
 var config struct {
 	Port           uint16
 	RequestTimeout uint16
-	MySQLUsername  string
-	MySQLPassword  string
-	MySQLHost      string
-	MySQLPort      uint16
-	MySQLDatabase  string
+	psqlUsername   string
+	psqlPassword   string
+	psqlHost       string
+	psqlPort       uint16
+	psqlDatabase   string
 }
 
 func init() {
 	config.Port = 8080
 	config.RequestTimeout = 10
-	config.MySQLUsername = "user"
-	config.MySQLPassword = "pass"
-	config.MySQLHost = "services-mysql"
-	config.MySQLPort = 3306
-	config.MySQLDatabase = "services"
+	config.psqlUsername = "postgres"
+	config.psqlPassword = "pass"
+	config.psqlHost = "services-psql"
+	config.psqlPort = 5432
+	config.psqlDatabase = "services"
 }
 
 func main() {
 	fmt.Println(fmt.Sprintf("server started at port %d", config.Port))
 
-	fmt.Println(fmt.Sprintf("connecting to %s on port %d", config.MySQLDatabase, config.MySQLPort))
+	fmt.Println(fmt.Sprintf("connecting to %s on port %d", config.psqlDatabase, config.psqlPort))
 	db, err := connectToDB(buildConnectionString())
 	if err != nil {
 		log.Fatal("db err", err)
 	}
 	defer db.Close()
-	fmt.Println(fmt.Sprintf("connected to %s", config.MySQLDatabase))
+	fmt.Println(fmt.Sprintf("connected to %s", config.psqlDatabase))
 
 	h := handler{db}
 	r := mux.NewRouter()
+	r.HandleFunc("/services", h.SearchServiceHandler).Queries("search", "{search}")
 	r.HandleFunc("/services", h.ListServiceHandler)
 	r.HandleFunc("/services/{id}", h.GetServiceHandler)
 	http.Handle("/", r)
@@ -74,41 +75,38 @@ func (h *handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 	offset := vars.Get("offset") // assume offset = last record shown + 1, handled by the front end
 	limit := 12                  // todo: user-defined limits to support dynamic page sizes in the ui
 
-	sqlStatement := `SELECT * FROM servicetable LIMIT ? OFFSET ?;`
-	results := []models.Service{}
+	queryStmt := fmt.Sprintf("SELECT * FROM servicetable LIMIT %d", limit)
 
-	rows, err := h.db.Query(sqlStatement, limit, offset)
+	if offset != "" {
+		queryStmt = fmt.Sprintf("%s OFFSET %s", queryStmt, offset)
+	}
+
+	rows, err := h.db.Query(queryStmt)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var id string
-		var description sql.NullString
-		var name string
+	results := scanResults(rows)
+	encode, _ := json.Marshal(results)
+	w.Write(encode)
+}
 
-		switch err = rows.Scan(&id, &name, &description); err {
-		case sql.ErrNoRows:
-			fmt.Println("No rows were returned!")
-		case nil:
-			s := models.Service{
-				Id:          id,
-				Name:        name,
-				Description: description.String,
-			}
-			results = append(results, s)
-		default:
-			panic(err)
-		}
-	}
+func (h *handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("call.SearchService")
+	vars := r.URL.Query()
+	searchTerm := vars.Get("search")
+	fmt.Println(searchTerm)
 
-	err = rows.Err()
+	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > 0.12;`, searchTerm)
+	rows, err := h.db.Query(queryStmt)
 	if err != nil {
 		panic(err)
 	}
-	encode, _ := json.Marshal(results)
+	defer rows.Close()
 
+	results := scanResults(rows)
+	encode, _ := json.Marshal(results)
 	w.Write(encode)
 }
 
@@ -124,9 +122,9 @@ func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 	results := []models.Service{}
 	// todo: sqlinjection guard
 	// tested on curl localhost:8080/services/105%20or%201%3D1
-	row := h.db.QueryRow("SELECT * FROM servicetable WHERE id = ?;", requestedId)
+	row := h.db.QueryRow("SELECT * FROM servicetable WHERE id = $1;", requestedId)
 
-	var id string
+	var id int
 	var description sql.NullString
 	var name string
 
@@ -149,8 +147,37 @@ func (h *handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(encode)
 }
 
+func scanResults(rows *sql.Rows) []models.Service {
+	results := []models.Service{}
+	for rows.Next() {
+		var id int
+		var description sql.NullString
+		var name string
+
+		switch err := rows.Scan(&id, &name, &description); err {
+		case sql.ErrNoRows:
+			fmt.Println("No rows were returned!")
+		case nil:
+			s := models.Service{
+				Id:          id,
+				Name:        name,
+				Description: description.String,
+			}
+			results = append(results, s)
+		default:
+			panic(err)
+		}
+	}
+
+	err := rows.Err()
+	if err != nil {
+		panic(err)
+	}
+	return results
+}
+
 func connectToDB(uri string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", uri)
+	db, err := sql.Open("pgx", uri)
 	if err != nil {
 		return nil, err
 	}
@@ -167,5 +194,5 @@ func connectToDB(uri string) (*sql.DB, error) {
 }
 
 func buildConnectionString() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", config.MySQLUsername, config.MySQLPassword, config.MySQLHost, config.MySQLPort, config.MySQLDatabase)
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", config.psqlHost, config.psqlPort, config.psqlUsername, config.psqlPassword, config.psqlDatabase)
 }

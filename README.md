@@ -33,6 +33,9 @@ The mockup shows a few components. For clarity, the following shall not be imple
 ### Pagination
 Pagination is accomplished using offset/limit. This method is straightforward to implement for both the API and database as well as reasonably preformant for our assumed data size.
 
+### Search
+- I do not need to support "live" search results, only return results once for a single query
+
 ### Datastore
 I chose postgres for my data store based on the following considerations:
 - There is a relationship between tables

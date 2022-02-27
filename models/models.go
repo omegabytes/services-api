@@ -1,7 +1,7 @@
 package models
 
 type Service struct {
-	Id          string
+	Id          int
 	Name        string
 	Description string
 	Versions    map[string]string
