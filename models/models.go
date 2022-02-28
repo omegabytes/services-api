@@ -4,9 +4,9 @@ type Service struct {
 	Id          int
 	Name        string
 	Description string
-	Versions    map[string]string
+	Versions    []ServiceVersion
 }
 
 type ServiceVersion struct {
-	Name string
+	SemVer string `json:"semver"`
 }

@@ -36,10 +36,11 @@ func (h *Handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("call.ListService")
 	offset := r.URL.Query().Get("offset") // assume offset = last record shown + 1, handled by the front end
-	o, err := strconv.Atoi(offset)
+	if offset == "" {
+		offset = "0"
+	}
 
-	// We could also set offset = 0 no matter what so the user gets results.
-	// I am chosing to reject here to show some easy-to-test error handling.
+	o, err := strconv.Atoi(offset)
 	if err != nil {
 		http.Error(w, "Invalid offset", 400)
 		return

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/omegabytes/services-api/models"
@@ -22,17 +23,24 @@ func (s *Store) GetService(requestedId string) ([]models.Service, error) {
 	var id int
 	var description sql.NullString
 	var name string
+	var versions interface{}
 
-	switch err := row.Scan(&id, &name, &description); err {
+	switch err := row.Scan(&id, &name, &description, &versions); err {
 	case nil:
 		s := models.Service{
 			Id:          id,
 			Name:        name,
 			Description: description.String,
 		}
+
+		if versions != nil {
+			var v = []models.ServiceVersion{}
+			json.Unmarshal([]byte(versions.([]uint8)), &v)
+			s.Versions = v
+		}
 		results = append(results, s)
 	default:
-		return nil, fmt.Errorf("Error scanning the database")
+		return nil, err
 	}
 	return results, nil
 }
@@ -47,7 +55,7 @@ func (s *Store) SearchServices(searchTerm string) ([]models.Service, error) {
 
 	results, err := scanResults(rows)
 	if err != nil {
-		return nil, fmt.Errorf("Error scanning the database")
+		return nil, err
 	}
 	return results, nil
 }
@@ -67,7 +75,7 @@ func (s *Store) ListServices(offset int) ([]models.Service, error) {
 
 	results, err := scanResults(rows)
 	if err != nil {
-		return nil, fmt.Errorf("Error scanning the database")
+		return nil, err
 	}
 
 	return results, nil
@@ -79,14 +87,22 @@ func scanResults(rows *sql.Rows) ([]models.Service, error) {
 		var id int
 		var description sql.NullString
 		var name string
+		var versions interface{}
 
-		switch err := rows.Scan(&id, &name, &description); err {
+		switch err := rows.Scan(&id, &name, &description, &versions); err {
 		case nil:
 			s := models.Service{
 				Id:          id,
 				Name:        name,
 				Description: description.String,
 			}
+
+			if versions != nil {
+				var v = []models.ServiceVersion{}
+				json.Unmarshal([]byte(versions.([]uint8)), &v)
+				s.Versions = v
+			}
+
 			results = append(results, s)
 		default:
 			return nil, err

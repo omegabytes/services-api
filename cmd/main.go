@@ -9,7 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"github.com/omegabytes/services-api/handlers"
+	hlrs "github.com/omegabytes/services-api/handlers"
 	"github.com/omegabytes/services-api/store"
 )
 
@@ -61,7 +61,7 @@ func main() {
 	defer db.Close()
 	fmt.Println(fmt.Sprintf("connected to %s", config.psqlDatabase))
 
-	h := handlers.Handler{
+	h := hlrs.Handler{
 		Store: store.Store{
 			DB:        db,
 			Limit:     config.limit,
@@ -69,12 +69,19 @@ func main() {
 		},
 	}
 	r := mux.NewRouter()
-	r.HandleFunc("/services", h.SearchServiceHandler).Queries("search", "{search}")
-	r.HandleFunc("/services", h.ListServiceHandler)
-	r.HandleFunc("/services/{id}", h.GetServiceHandler)
-	http.Handle("/", r)
+	r.Use(middleware)
+	r.HandleFunc("/services", h.SearchServiceHandler).Queries("search", "{search}").Methods("GET")
+	r.HandleFunc("/services", h.ListServiceHandler).Methods("GET")
+	r.HandleFunc("/services/{id}", h.GetServiceHandler).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r))
+}
+
+func middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func connectToDB(uri string) (*sql.DB, error) {
