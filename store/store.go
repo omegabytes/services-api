@@ -14,37 +14,26 @@ type Store struct {
 	Precision float32
 }
 
+// GetService fetches a single service by a given service ID.
 func (s *Store) GetService(requestedId string) ([]models.Service, error) {
-	results := []models.Service{}
-	// todo: sqlinjection guard
-	// tested on curl localhost:8080/services/105%20or%201%3D1
-	row := s.DB.QueryRow("SELECT * FROM servicetable WHERE id = $1;", requestedId)
+	// I could have used sql.QueryRow (which returns at most one row) but elected to use QueryRows so I could reuse my scan fx.
+	row, err := s.DB.Query("SELECT * FROM servicetable WHERE id = $1;", requestedId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid query")
+	}
+	defer row.Close()
 
-	var id int
-	var description sql.NullString
-	var name string
-	var versions interface{}
-
-	switch err := row.Scan(&id, &name, &description, &versions); err {
-	case nil:
-		s := models.Service{
-			Id:          id,
-			Name:        name,
-			Description: description.String,
-		}
-
-		if versions != nil {
-			var v = []models.ServiceVersion{}
-			json.Unmarshal([]byte(versions.([]uint8)), &v)
-			s.Versions = v
-		}
-		results = append(results, s)
-	default:
+	results, err := scanResults(row)
+	if err != nil {
 		return nil, err
 	}
+
 	return results, nil
 }
 
+// SearchServices fetches all results from the services table that are "close enough" to a user's search term.
+// The term is compared against a contatenation of the name and description. This will break in the event name is allowed to be nil in the future!
+// The precision is a runtime config to support lower-lift product tweaking.
 func (s *Store) SearchServices(searchTerm string) ([]models.Service, error) {
 	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > %f limit %d;`, searchTerm, s.Precision, s.Limit)
 	rows, err := s.DB.Query(queryStmt)
@@ -60,6 +49,8 @@ func (s *Store) SearchServices(searchTerm string) ([]models.Service, error) {
 	return results, nil
 }
 
+// ListServices fetches all services from the database up to the preconfigured limit.
+// Note: Given time, I would add more advanced support in the query for fetching results after a certain date etc.
 func (s *Store) ListServices(offset int) ([]models.Service, error) {
 	queryStmt := fmt.Sprintf("SELECT * FROM servicetable LIMIT %d", s.Limit)
 
@@ -81,6 +72,7 @@ func (s *Store) ListServices(offset int) ([]models.Service, error) {
 	return results, nil
 }
 
+// scanResults traverses/transforms multirow database response into service objects
 func scanResults(rows *sql.Rows) ([]models.Service, error) {
 	results := []models.Service{}
 	for rows.Next() {

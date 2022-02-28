@@ -9,13 +9,9 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
-	hlrs "github.com/omegabytes/services-api/handlers"
+	"github.com/omegabytes/services-api/handlers"
 	"github.com/omegabytes/services-api/store"
 )
-
-// type handler struct {
-// 	db *sql.DB
-// }
 
 var config struct {
 	// service
@@ -61,24 +57,33 @@ func main() {
 	defer db.Close()
 	fmt.Println(fmt.Sprintf("connected to %s", config.psqlDatabase))
 
-	h := hlrs.Handler{
+	h := handlers.Handler{
 		Store: store.Store{
 			DB:        db,
 			Limit:     config.limit,
 			Precision: config.precision,
 		},
 	}
+
 	r := mux.NewRouter()
+	r.StrictSlash(true)
 	r.Use(middleware)
-	r.HandleFunc("/services", h.SearchServiceHandler).Queries("search", "{search}").Methods("GET")
-	r.HandleFunc("/services", h.ListServiceHandler).Methods("GET")
-	r.HandleFunc("/services/{id}", h.GetServiceHandler).Methods("GET")
+	api := r.PathPrefix("/api").Subrouter() // some /api paths do not require authentication
+	api.HandleFunc("/authenticate", h.Authenticate).Methods("POST")
+
+	v1 := api.PathPrefix("/v1").Subrouter()
+	v1.Use(h.AuthMiddleware) // all requests to /api/v1 paths require authentication
+	v1.HandleFunc("/services", h.SearchServiceHandler).Queries("search", "{search}").Methods("GET")
+	v1.HandleFunc("/services", h.ListServiceHandler).Methods("GET")
+	v1.HandleFunc("/services/{id}", h.GetServiceHandler).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r))
 }
 
 func middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(r.RequestURI)
+
 		w.Header().Add("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
