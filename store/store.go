@@ -34,8 +34,8 @@ func (s *Store) GetService(requestedId string) ([]models.Service, error) {
 // SearchServices fetches all results from the services table that are "close enough" to a user's search term.
 // The term is compared against a contatenation of the name and description. This will break in the event name is allowed to be nil in the future!
 // The precision is a runtime config to support lower-lift product tweaking.
-func (s *Store) SearchServices(searchTerm string) ([]models.Service, error) {
-	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > %f limit %d;`, searchTerm, s.Precision, s.Limit)
+func (s *Store) SearchServices(searchTerm string, sort string) ([]models.Service, error) {
+	queryStmt := fmt.Sprintf(`SELECT * FROM servicetable WHERE SIMILARITY((name || ' ' || description), '%s') > %f ORDER BY id %s limit %d;`, searchTerm, s.Precision, sort, s.Limit)
 	rows, err := s.DB.Query(queryStmt)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid query")
@@ -51,8 +51,8 @@ func (s *Store) SearchServices(searchTerm string) ([]models.Service, error) {
 
 // ListServices fetches all services from the database up to the preconfigured limit.
 // Note: Given time, I would add more advanced support in the query for fetching results after a certain date etc.
-func (s *Store) ListServices(offset int) ([]models.Service, error) {
-	queryStmt := fmt.Sprintf("SELECT * FROM servicetable LIMIT %d", s.Limit)
+func (s *Store) ListServices(offset int, sort string) ([]models.Service, error) {
+	queryStmt := fmt.Sprintf("SELECT * FROM servicetable ORDER BY id %s LIMIT %d ", sort, s.Limit)
 
 	if offset != 0 {
 		queryStmt = fmt.Sprintf("%s OFFSET %d", queryStmt, offset)

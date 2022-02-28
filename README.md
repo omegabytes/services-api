@@ -39,7 +39,7 @@ Tests can be run with `go test ./...` from the project root.
 - Searches are performed against both name and description fields using fuzzy match
 
 ### Assumptions
-These assumptions were defined during the technical interview
+These assumptions were defined during the technical interview.
 - Number of services in the database is less than 100,000
 - Service name can not be null
 - Service description can be null
@@ -48,6 +48,7 @@ These assumptions were defined during the technical interview
 - Name and description values are english
 - Do not need to support live-updating search results as a user types
 - "Add New Service" button, notification, help, and user (icons in top right) are out of scope
+- Cacheing is out of scope
 
 ## Considerations
 ### Pagination

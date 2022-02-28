@@ -43,13 +43,18 @@ func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 		offset = "0"
 	}
 
+	sort := r.URL.Query().Get("sort")
+	if sort != "asc" && sort != "desc" {
+		sort = "asc"
+	}
+
 	o, err := strconv.Atoi(offset)
 	if err != nil {
 		http.Error(w, "Invalid offset", http.StatusBadRequest)
 		return
 	}
 
-	results, err := h.Store.ListServices(o)
+	results, err := h.Store.ListServices(o, sort)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -60,6 +65,7 @@ func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(encode)
 }
 
+// SearchServiceHandler performs basic validation of user input and returns a sorted list of services.
 func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("call.SearchService")
 	searchTerm := r.URL.Query().Get("search")
@@ -74,8 +80,13 @@ func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sort := r.URL.Query().Get("sort")
+	if sort != "asc" && sort != "desc" {
+		sort = "asc"
+	}
+
 	// todo: additional validation to prevent SQL injection etc
-	results, err := h.Store.SearchServices(searchTerm)
+	results, err := h.Store.SearchServices(searchTerm, sort)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -84,4 +95,13 @@ func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 	encode, _ := json.Marshal(results)
 	w.WriteHeader(http.StatusOK)
 	w.Write(encode)
+}
+
+func (h *Handler) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(r.RequestURI)
+
+		w.Header().Add("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
 }

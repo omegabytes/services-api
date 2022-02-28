@@ -67,7 +67,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.StrictSlash(true)
-	r.Use(middleware)
+	r.Use(h.Middleware)
 	api := r.PathPrefix("/api").Subrouter() // some /api paths do not require authentication
 	api.HandleFunc("/authenticate", h.Authenticate).Methods("POST")
 
@@ -78,15 +78,6 @@ func main() {
 	v1.HandleFunc("/services/{id}", h.GetServiceHandler).Methods("GET")
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), r))
-}
-
-func middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(r.RequestURI)
-
-		w.Header().Add("Content-Type", "application/json")
-		next.ServeHTTP(w, r)
-	})
 }
 
 func connectToDB(uri string) (*sql.DB, error) {
