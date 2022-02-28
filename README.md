@@ -3,10 +3,13 @@ Take home challenge for Kong.
 
 ## Summary
 
+
 ## Requirements
 1. User can see the name, a brief description, and versions available for a given service
 2. User can navigate to a given service from its card
 3. User can search for a specific service
+
+[!](https://www.figma.com/file/zeaWiePnc3OCe34I4oZbzN/Service-Card-List?node-id=0%3A1)
 
 ### Functionality
 support filtering, sorting, pagination
@@ -23,6 +26,7 @@ support filtering, sorting, pagination
 - Restricting/filtering search results by User/Organization is not important for this exercise
 - Database schema is stable
 - Name and description values are english
+- Do not need to support live-updating search results as a user types
 
 ### Out of Scope
 The mockup shows a few components. For clarity, the following shall not be implemented as a part of this exercise:
@@ -31,57 +35,13 @@ The mockup shows a few components. For clarity, the following shall not be imple
 
 ## Considerations
 ### Pagination
-Pagination is accomplished using offset/limit. This method is straightforward to implement for both the API and database as well as reasonably preformant for our assumed data size.
+Pagination is accomplished using offset/limit. This method is straightforward to implement for both the API and database as well as reasonably preformant for our assumed data size. I have set a global config for the limit  to represent a flexble way for engineering to update or even a/b test these page sizes across otherwise identically deployed services. The config limit can also quickly be updated to instead be a user-defined value to support a user defining the number of results on a page, for example.
 
 ### Search
-- I do not need to support "live" search results, only return results once for a single query
+I leveraged postgres' extensions to implement a fuzzy search. To support queries against both the name and description fields, I concatenated both fields and built a trigram index. I also concat the name and description when we query. Queries remain pretty quick, and from what I read online this method of indexing and searching should remain reasonably performant as the amount of data grows.
 
 ### Datastore
 I chose postgres for my data store based on the following considerations:
-- There is a relationship between tables
-- I wont need to change the schema in the foreseeable future
+- Schema is stable, won't need to be changed in the near future
 - It supports extensions for fuzzy searching, and advantage over mysql
-
-```
-services=# explain analyse select * from servicetable where similarity(description, 'serv') > 0.05;
-                                                QUERY PLAN
-
-----------------------------------------------------------------------------------------
-------------------
- Seq Scan on servicetable  (cost=0.00..22.75 rows=283 width=68) (actual time=0.072..0.22
-7 rows=4 loops=1)
-   Filter: (similarity(description, 'serv'::text) > '0.05'::double precision)
-   Rows Removed by Filter: 14
- Planning Time: 0.092 ms
- Execution Time: 0.474 ms
-(5 rows)
-
-
-services=# explain analyse select * from servicetable where similarity((name || ' ' || description), 'not') > 0.05;
-                                                QUERY PLAN
-
-----------------------------------------------------------------------------------------
-------------------
- Seq Scan on servicetable  (cost=0.00..27.00 rows=283 width=68) (actual time=0.046..0.36
-0 rows=3 loops=1)
-   Filter: (similarity(((name || ' '::text) || description), 'not'::text) > '0.05'::doub
-le precision)
-   Rows Removed by Filter: 15
- Planning Time: 0.115 ms
- Execution Time: 0.470 ms
-(5 rows)
-
-
-services=# explain analyse select * from servicetable where name || ' ' || description ilike '%serv%';
-                                               QUERY PLAN
-
-----------------------------------------------------------------------------------------
-----------------
- Seq Scan on servicetable  (cost=0.00..24.88 rows=7 width=68) (actual time=0.158..0.215
-rows=3 loops=1)
-   Filter: (((name || ' '::text) || description) ~~* '%serv%'::text)
-   Rows Removed by Filter: 15
- Planning Time: 0.174 ms
- Execution Time: 0.322 ms
-(5 rows)
-```
+- There's several drivers for go's sql package
