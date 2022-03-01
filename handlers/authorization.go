@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -14,7 +15,7 @@ func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if len(name) == 0 || len(password) == 0 {
-		http.Error(w, "Name and password are required", http.StatusBadRequest)
+		resBadRequest(w, "Name and password are required")
 		return
 	}
 
@@ -22,15 +23,14 @@ func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	if name == "user" && password == "pass" {
 		token, err := getToken(name)
 		if err != nil {
-			http.Error(w, "Error generating token: "+err.Error(), http.StatusInternalServerError)
+			resInternalError(w, "Error generating token: "+err.Error())
 		} else {
 			w.Header().Set("Authorization", "Bearer "+token)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Token: " + token))
 		}
 	} else {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("Unable to sign in with that user or password"))
+		resUnauthorized(w, "Unable to sign in with that user or password")
 		return
 	}
 }
@@ -40,13 +40,13 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
 		if len(token) == 0 {
-			http.Error(w, "Missing authorization header", http.StatusUnauthorized)
+			resUnauthorized(w, "Missing authorization header")
 			return
 		}
 		token = strings.Replace(token, "Bearer ", "", 1)
 		claims, err := verifyToken(token)
 		if err != nil {
-			http.Error(w, "Error verifying token: "+err.Error(), http.StatusUnauthorized)
+			resUnauthorized(w, "Error verifying token: "+err.Error())
 			return
 		}
 		name := claims.(jwt.MapClaims)["name"].(string)
@@ -81,4 +81,14 @@ func verifyToken(tokenString string) (jwt.Claims, error) {
 		return nil, err
 	}
 	return token.Claims, err
+}
+
+func resUnauthorized(w http.ResponseWriter, message string) {
+	response := map[string]interface{}{
+		"status":  http.StatusUnauthorized,
+		"message": message,
+	}
+	w.WriteHeader(http.StatusUnauthorized)
+	resp, _ := json.Marshal(response)
+	w.Write(resp)
 }

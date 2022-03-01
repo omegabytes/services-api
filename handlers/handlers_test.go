@@ -25,7 +25,7 @@ func TestHandlers(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 
 		assert.Equal(t, 400, resp.StatusCode)
-		assert.Equal(t, []byte("Invalid offset\n"), body)
+		assert.Equal(t, []byte(`{"message":"Invalid offset","status":400}`), body)
 	})
 
 	t.Run("SearchService Should return 400 when search term is missing", func(t *testing.T) {
@@ -36,7 +36,7 @@ func TestHandlers(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 
 		assert.Equal(t, 400, resp.StatusCode)
-		assert.Equal(t, []byte("Invalid search\n"), body)
+		assert.Equal(t, []byte(`{"message":"Invalid search","status":400}`), body)
 	})
 
 	t.Run("SearchService Should return 400 when search term is too long", func(t *testing.T) {
@@ -48,10 +48,6 @@ func TestHandlers(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 
 		assert.Equal(t, 400, resp.StatusCode)
-		assert.Equal(t, []byte("Search term to long\n"), body)
-	})
-
-	t.Run("GetService should return a 400 when id is missing", func(t *testing.T) {
-		t.Skip()
+		assert.Equal(t, []byte(`{"message":"Search term too long","status":400}`), body)
 	})
 }

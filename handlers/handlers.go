@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -16,16 +15,15 @@ type Handler struct {
 
 // GetServiceHandler fetches a single service using a given service ID.
 func (h *Handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("call.GetService")
 	id, ok := mux.Vars(r)["id"]
 	if !ok {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		resBadRequest(w, "id is required")
 		return
 	}
 
 	results, err := h.Store.GetService(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		resBadRequest(w, err.Error())
 		return
 	}
 
@@ -37,7 +35,6 @@ func (h *Handler) GetServiceHandler(w http.ResponseWriter, r *http.Request) {
 // ListServiceHandler returns a list of services. The maximum returned services is configured using the global
 // config.Limit value that is set at runtime. A user-provided offset value is used to fetch subsquent results.
 func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("call.ListService")
 	offset := r.URL.Query().Get("offset") // assume offset = last record shown + 1, handled by the front end
 	if offset == "" {
 		offset = "0"
@@ -50,13 +47,13 @@ func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 
 	o, err := strconv.Atoi(offset)
 	if err != nil {
-		http.Error(w, "Invalid offset", http.StatusBadRequest)
+		resBadRequest(w, "Invalid offset")
 		return
 	}
 
 	results, err := h.Store.ListServices(o, sort)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		resInternalError(w, err.Error())
 		return
 	}
 
@@ -67,16 +64,15 @@ func (h *Handler) ListServiceHandler(w http.ResponseWriter, r *http.Request) {
 
 // SearchServiceHandler performs basic validation of user input and returns a sorted list of services.
 func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("call.SearchService")
 	searchTerm := r.URL.Query().Get("search")
 
 	if searchTerm == "" {
-		http.Error(w, "Invalid search", http.StatusBadRequest)
+		resBadRequest(w, "Invalid search")
 		return
 	}
 
 	if len(searchTerm) > 100 {
-		http.Error(w, "Search term to long", http.StatusBadRequest)
+		resBadRequest(w, "Search term too long")
 		return
 	}
 
@@ -88,7 +84,7 @@ func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 	// todo: additional validation to prevent SQL injection etc
 	results, err := h.Store.SearchServices(searchTerm, sort)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		resBadRequest(w, err.Error())
 		return
 	}
 
@@ -99,9 +95,27 @@ func (h *Handler) SearchServiceHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(r.RequestURI)
-
 		w.Header().Add("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func resBadRequest(w http.ResponseWriter, message string) {
+	response := map[string]interface{}{
+		"status":  http.StatusBadRequest,
+		"message": message,
+	}
+	w.WriteHeader(http.StatusBadRequest)
+	resp, _ := json.Marshal(response)
+	w.Write(resp)
+}
+
+func resInternalError(w http.ResponseWriter, message string) {
+	response := map[string]interface{}{
+		"status":  http.StatusInternalServerError,
+		"message": message,
+	}
+	w.WriteHeader(http.StatusInternalServerError)
+	resp, _ := json.Marshal(response)
+	w.Write(resp)
 }
