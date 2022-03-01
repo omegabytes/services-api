@@ -4,10 +4,15 @@
 I only support one user for this demo project.
 ```
 curl localhost:8080/api/authenticate -F name=user -F password=pass
-Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoidXNlciIsInJvbGUiOiJtZW1iZXIifQ.XBqsh1PM4Ne9eETglL7aSve-YWlCzUUvp0evHQxAxN0%
+{
+	Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoidXNlciIsInJvbGUiOiJtZW1iZXIifQ.XBqsh1PM4Ne9eETglL7aSve-YWlCzUUvp0evHQxAxN0
+}
 
 curl localhost:8080/api/authenticate -F name=user -F password=badpass
-Unable to sign in with that user or password%
+{
+    "message": "Unable to sign in with that user or password",
+    "status": 401
+}
 ```
 
 ## Unauthorized Request

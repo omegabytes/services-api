@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -27,7 +28,7 @@ func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.Header().Set("Authorization", "Bearer "+token)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Token: " + token))
+			w.Write([]byte(fmt.Sprintf("{Token:%s}", token)))
 		}
 	} else {
 		resUnauthorized(w, "Unable to sign in with that user or password")
