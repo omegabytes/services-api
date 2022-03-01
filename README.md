@@ -66,7 +66,7 @@ I chose postgres for my data store based on the following considerations:
 - Relational (I may want to add a user table for auth + a `createdBy` relationship to the service table)
 
 ### Tests
-I only wrote super-basic tests for the handlers. One of the trade-offs of using gorilla for my API mux is the need to stand up an entire dummy server in order to run tests. This is something I would do in a production setting. Same with the datastore.
+I only wrote super-basic tests for the handlers. The happy-path tests require implementing datastore mocks, which is a bit overkill for a toy project like this. However, this is something I'd absolutely do to productionize this service.
 
 ## Examples
 See the [examples](./examples.md) file for a quick overview of the project in action.
