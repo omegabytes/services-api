@@ -26,7 +26,7 @@ First, clone this repo and navigate to the project root. To start the project, r
 docker-compse up
 ```
 
-You'll see `app_1 | connected to services` after both the app and database containers successfully start, which means you're ready to go. The database is seeded with ~20 entries to test against. Check out the [init script](/Users/alex/Desktop/Programming/services-api/storage/initdb.sql) to see what you can query on.
+You'll see `app_1 | connected to services` after both the app and database containers successfully start, which means you're ready to go. The database is seeded with ~20 entries to test against. Check out the [init script](storage/initdb.sql) to see what you can query on.
 
 You can test the service using another terminal window or an API tool like insomnia. Try the following endpoints/params:
 ```
